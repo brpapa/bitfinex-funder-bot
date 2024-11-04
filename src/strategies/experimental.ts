@@ -1,6 +1,6 @@
 import { getCandles } from '../bitfinex/public'
 
-// ESTRATEGIA PRA TENTAR BUSCAR MAIOR TAXA MAS ESPERANDO MAIS
+// ESTRATEGIA PRA TENTAR BUSCAR MAIOR TAXA MAS ESPERANDO MAIS?
 // para todo o saldo disponivel que ainda nao esta emprestado
 //   ofertar na taxa mais alta dos que bateu 80% das vezes nos ultimos 10 dias, deixar oferta nela por até 7 dias
 //   ordernar o high do maior pro menor e pegar o por exemplo quinto maior

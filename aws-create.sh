@@ -16,10 +16,11 @@ docker push "${ECR_REPO}:latest"
 
 # Step 4: Create Lambda Function Using the Container Image
 aws lambda create-function --function-name "${FUNCTION_NAME}" \
---package-type Image \
---code ImageUri="${ECR_REPO}:latest" \
---role "arn:aws:iam::${AWS_ACCOUNT_ID}:role/service-role/basic-lambda-execute-rule" \
---profile "${PROFILE}"
+  --package-type Image \
+  --code ImageUri="${ECR_REPO}:latest" \
+  --role "arn:aws:iam::${AWS_ACCOUNT_ID}:role/service-role/basic-lambda-execute-rule" \
+  --timeout 30 \
+  --profile "${PROFILE}" > /dev/null
 
 # Step 5: Create an EventBridge Rule for Scheduled Invocation (every hour)
 aws events put-rule --schedule-expression "cron(0 * * * ? *)" --name "${EVENT_RULE_NAME}" --profile "${PROFILE}"
@@ -29,10 +30,10 @@ aws events put-targets --rule "${EVENT_RULE_NAME}" --targets "Id"="1","Arn"="arn
 
 # Step 7: Grant EventBridge Permission to Invoke Lambda
 aws lambda add-permission --function-name "${FUNCTION_NAME}" \
---statement-id "${EVENT_RULE_NAME}Permission" \
---action 'lambda:InvokeFunction' \
---principal events.amazonaws.com \
---source-arn "arn:aws:events:${REGION}:${AWS_ACCOUNT_ID}:rule/${EVENT_RULE_NAME}" \
---profile "${PROFILE}"
+  --statement-id "${EVENT_RULE_NAME}Permission" \
+  --action 'lambda:InvokeFunction' \
+  --principal events.amazonaws.com \
+  --source-arn "arn:aws:events:${REGION}:${AWS_ACCOUNT_ID}:rule/${EVENT_RULE_NAME}" \
+  --profile "${PROFILE}"
 
 echo "Creation script completed successfully."

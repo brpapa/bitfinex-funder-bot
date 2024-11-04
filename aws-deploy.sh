@@ -12,8 +12,8 @@ docker push "${ECR_REPO}:latest"
 
 # Step 3: Update the Lambda Function to Use the New Image
 aws lambda update-function-code --function-name "${FUNCTION_NAME}" \
---image-uri "${ECR_REPO}:latest" \
---profile "${PROFILE}"
+  --image-uri "${ECR_REPO}:latest" \
+  --profile "${PROFILE}" > /dev/null
 
 # Step 4: List Images and Delete Old Images
 # Get image digests of all images except the latest one
@@ -29,7 +29,7 @@ if [ -n "$OLD_IMAGES" ]; then
   aws ecr batch-delete-image --repository-name "${IMAGE_NAME}" \
     --image-ids "$OLD_IMAGES" \
     --profile "${PROFILE}" \
-    --region "${REGION}"
+    --region "${REGION}" > /dev/null
   echo "Old images deleted."
 else
   echo "No old images to delete."

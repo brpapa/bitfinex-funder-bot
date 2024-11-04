@@ -1,33 +1,50 @@
 import {
   cancelFundingOffer,
   getActiveFundingOffers,
+  getBalanceAvailable,
   getWallets,
   submitFundingOffer,
 } from '../bitfinex/private'
 import { getFundingStats } from '../bitfinex/public'
 
-const symbol = 'fUSD'
+// TODO: me mandar sms se der qualquer exception
+
+// TODO: me mandar sms se pelo menos 150 usd está há mais de 5 dias sem conseguir emprestar
+//    pega saldo disponivel + total de todas ofertas ativas, guarda esse valor a cada 1h, a cada execucao se o minimo desse valor nos ultimos 3 dias é maior que 150 alertar
+
+type Currency = 'USD' | 'EUR'
+const currencies: Currency[] = ['USD', 'EUR']
+
+const frrOffset = (currency: Currency) =>
+  ({
+    USD: -0.000025,
+    EUR: -0.000065,
+  }[currency])
 
 // estratégia para sempre estar emprestado com uma taxa levemente abaixo da ultima taxa frr (com mais dias se ela for boa)
 export async function basic() {
-  const desiredRate = await getDesiredRate()
-  await cancelAllActiveOffersWithRateNotDesired(desiredRate)
-  await offerAllAvailableBalance(desiredRate)
+  for (const currency of currencies) {
+    console.log(`running for ${currency}`)
+    const desiredRate = await getDesiredRate(currency)
+    await cancelActiveOffersWithoutDesiredRate(currency, desiredRate)
+    await offerAllAvailableBalance(currency, desiredRate)
+  }
 }
 
-async function offerAllAvailableBalance(desiredRate: number) {
-  const wallets = await getWallets()
-  const availableUSD = wallets.find(
-    (w) => w.type === 'funding' && w.currency === 'USD'
-  )!.availableBalance
-  console.log('available usd balance:', availableUSD)
+async function offerAllAvailableBalance(
+  currency: Currency,
+  desiredRate: number
+) {
+  const availableAmountToOffer = await getBalanceAvailable(
+    symbol(currency),
+    'FUNDING'
+  )
+  console.log(`${availableAmountToOffer} ${currency} available to offer`)
 
-  for (const amount of splitInParts(availableUSD, 300)) {
-    if (amount < 150) continue // because its not permitted offer with amount < 150
-
+  for (const amount of splitInParts(availableAmountToOffer, 300)) {
     await submitFundingOffer({
       type: 'LIMIT',
-      symbol: symbol,
+      symbol: symbol(currency),
       amount: amount.toString(),
       rate: desiredRate.toString(),
       period: periodFromRate(desiredRate),
@@ -35,8 +52,11 @@ async function offerAllAvailableBalance(desiredRate: number) {
   }
 }
 
-async function cancelAllActiveOffersWithRateNotDesired(desiredRate: number) {
-  const offers = await getActiveFundingOffers(symbol)
+async function cancelActiveOffersWithoutDesiredRate(
+  currency: Currency,
+  desiredRate: number
+) {
+  const offers = await getActiveFundingOffers(symbol(currency))
 
   const offersToCancel = offers.filter((offer) => offer.rate != desiredRate)
   console.log(`${offersToCancel.length} offers to cancel`)
@@ -44,15 +64,16 @@ async function cancelAllActiveOffersWithRateNotDesired(desiredRate: number) {
   for (const offer of offersToCancel) await cancelFundingOffer(offer.id)
 }
 
-const getDesiredRate = async () => {
-  const stats = await getFundingStats(symbol)
+const getDesiredRate = async (currency: Currency) => {
+  const stats = await getFundingStats(symbol(currency))
   const mostRecentFrr = stats[0].frrDaily
-  console.log('most recent frr:', mostRecentFrr)
-
-  const offerRate = mostRecentFrr - 0.00002
-  console.log('desired rate to offer:', offerRate)
-
-  return offerRate
+  const desiredRate = parseFloat(
+    (mostRecentFrr + frrOffset(currency)).toFixed(5)
+  )
+  console.log(
+    `most recent frr is ${mostRecentFrr}, so desire rate is ${desiredRate}`
+  )
+  return desiredRate
 }
 
 const periodFromRate = (rate: number) => {
@@ -61,6 +82,8 @@ const periodFromRate = (rate: number) => {
   if (rate >= 0.0004) return 7
   return 2
 }
+
+const symbol = (currency: String) => `f${currency}`
 
 const splitInParts = (total: number, part: number) => {
   const ret: number[] = []

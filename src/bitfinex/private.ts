@@ -5,6 +5,17 @@ config()
 
 // returns for current user (me): https://docs.bitfinex.com/docs/rest-auth
 
+export const getBalanceAvailable = (
+  symbol: string,
+  type: 'EXCHANGE' | 'MARGIN' | 'FUNDING'
+) =>
+  postPrivateEndpoint('v2/auth/calc/order/avail', { symbol, type }).then(
+    (response) => {
+      const balance = z.array(z.any()).parse(response)[0]
+      return -z.number().parse(balance)
+    }
+  )
+
 export const getWallets = () =>
   postPrivateEndpoint('v2/auth/r/wallets').then((response) =>
     z
@@ -52,30 +63,33 @@ export const submitFundingOffer = async (req: {
   rate: string
   period: number
 }) => {
-  return postPrivateEndpoint('v2/auth/w/funding/offer/submit', req)
-    .then((response) => {
+  return postPrivateEndpoint('v2/auth/w/funding/offer/submit', req).then(
+    (response) => {
       const notification = z.array(z.any()).parse(response)
-      return {
-        ts: new Date(z.number().parse(notification[0])),
-        type: z.string().parse(notification[1]),
-        offer: parseOffer(z.array(z.any()).parse(notification[4])),
-        status: z.enum(['SUCCESS', 'ERROR', 'FAILURE']).parse(notification[6]),
-        text: z.string().parse(notification[7]),
-      }
-    })
-    .then((response) => {
-      if (response?.status !== 'SUCCESS')
-        throw new Error(
-          `got status ${response.status} submitting funding offer`
+
+      if (notification[0] === 'error') {
+        const error = z.string().parse(notification[2])
+        if (!error.startsWith('Invalid offer: incorrect amount, minimum is'))
+          throw new Error(`got error submitting funding offer: ${error}`)
+
+        console.log(
+          `not submitted funding offer of ${req.amount} ${req.symbol} at ${req.rate} for ${req.period} days because of \"${error}\"`
         )
+        return
+      }
+
+      const status = z.string().parse(notification[6])
+      if (status !== 'SUCCESS')
+        throw new Error(`got status submitting funding offer: ${status} `)
 
       console.log(
         `submitted funding offer of ${req.amount} ${req.symbol} at ${req.rate} for ${req.period} days`
       )
-    })
+    }
+  )
 }
 
-const parseOffer = (offer: any[]) => ({
+const parseOffer = (offer: unknown[]) => ({
   id: z.number().parse(offer[0]),
   symbol: z.string().parse(offer[1]),
   tsCreated: new Date(z.number().parse(offer[2])),
@@ -87,6 +101,29 @@ const parseOffer = (offer: any[]) => ({
     .parse(offer[10]),
   rate: z.number().parse(offer[14]),
   period: z.number().parse(offer[15]),
+})
+
+export const getActiveFundingCredits = (symbol: string) =>
+  postPrivateEndpoint(`v2/auth/r/funding/credits/${symbol}`).then((response) =>
+    z.array(z.array(z.any())).parse(response).map(parseCredit)
+  )
+
+export const getPastInactiveFundingCredits = (symbol: string) =>
+  postPrivateEndpoint(`v2/auth/r/funding/credits/${symbol}/hist`).then(
+    (response) => z.array(z.array(z.any())).parse(response).map(parseCredit)
+  )
+
+const parseCredit = (credit: unknown[]) => ({
+  id: z.number().parse(credit[0]),
+  type: z.string().parse(credit[1]),
+  side: z.number().parse(credit[2]),
+  tsCreate: new Date(z.number().parse(credit[3])),
+  tsUpdate: new Date(z.number().parse(credit[4])),
+  amount: z.number().parse(credit[5]),
+  rate: z.number().parse(credit[11]),
+  period: z.number().parse(credit[12]),
+  tsOpening: new Date(z.number().parse(credit[13])),
+  tsLastPayout: new Date(z.number().parse(credit[14])),
 })
 
 async function postPrivateEndpoint(
