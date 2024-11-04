@@ -1,0 +1,19 @@
+{
+  "type": "commonjs",
+  "scripts": {
+    "docker:start": "docker build --platform linux/arm64 --tag bot . && docker run --rm -p 8080:8080 bot",
+    "docker:invoke": "curl --request POST --url http://localhost:8080/2015-03-31/functions/function/invocations --data '{}'",
+    "invoke": "ts-node src/invoke.ts",
+    "simulator": "ts-node src/simulator.ts",
+    "build": "npx tsc"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.3"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "zod": "^3.23.8"
+  }
+}
