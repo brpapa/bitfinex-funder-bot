@@ -1,10 +1,11 @@
 {
   "type": "commonjs",
   "scripts": {
-    "docker:start": "docker build --platform linux/arm64 --tag bot . && docker run --rm -p 8080:8080 bot",
+    "docker:run": "docker build --platform linux/arm64 --tag bot . && docker run --rm -p 8080:8080 bot",
     "docker:invoke": "curl --request POST --url http://localhost:8080/2015-03-31/functions/function/invocations --data '{}'",
     "invoke": "ts-node src/invoke.ts",
     "simulator": "ts-node src/simulator.ts",
+    "arbitrage": "ts-node src/arbitrage.ts",
     "build": "npx tsc"
   },
   "devDependencies": {
@@ -13,6 +14,8 @@
     "typescript": "^5.4.3"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.685.0",
+    "@aws-sdk/client-sns": "^3.682.0",
     "dotenv": "^16.4.5",
     "zod": "^3.23.8"
   }

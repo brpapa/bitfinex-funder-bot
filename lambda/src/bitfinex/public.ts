@@ -14,6 +14,21 @@ export const getCandles = (candle: string) =>
       }))
   )
 
+export const getTickers = (symbols: string[]) =>
+  getPublicEndpoint('v2/tickers', { symbols }).then((response) =>
+    z
+      .array(z.array(z.any()))
+      .parse(response)
+      .map((ticker) => ({
+        symbol: z.string().parse(ticker[0]),
+        bid: z.number().parse(ticker[1]),
+        bid25Size: z.number().parse(ticker[2]),
+        ask: z.number().parse(ticker[3]),
+        ask25Size: z.number().parse(ticker[4]),
+        lastPrice: z.number().parse(ticker[7]),
+      }))
+  )
+
 export const getFundingStats = (
   symbol: string,
   params: { start?: number; end?: number } = {}

@@ -1,20 +1,17 @@
 import crypto from 'crypto'
 import { z } from 'zod'
-import { config } from 'dotenv'
-config()
+import { bitfinexApiKey, bitfinexApiSecret } from '../env'
 
 // returns for current user (me): https://docs.bitfinex.com/docs/rest-auth
 
-export const getBalanceAvailable = (
-  symbol: string,
-  type: 'EXCHANGE' | 'MARGIN' | 'FUNDING'
-) =>
-  postPrivateEndpoint('v2/auth/calc/order/avail', { symbol, type }).then(
-    (response) => {
-      const balance = z.array(z.any()).parse(response)[0]
-      return -z.number().parse(balance)
-    }
-  )
+export const getFundingBalanceAvailable = (symbol: string) =>
+  postPrivateEndpoint('v2/auth/calc/order/avail', {
+    symbol,
+    type: 'FUNDING',
+  }).then((response) => {
+    const balance = z.array(z.any()).parse(response)[0]
+    return -z.number().parse(balance)
+  })
 
 export const getWallets = () =>
   postPrivateEndpoint('v2/auth/r/wallets').then((response) =>
@@ -89,6 +86,8 @@ export const submitFundingOffer = async (req: {
   )
 }
 
+export type Offer = ReturnType<typeof parseOffer>
+
 const parseOffer = (offer: unknown[]) => ({
   id: z.number().parse(offer[0]),
   symbol: z.string().parse(offer[1]),
@@ -135,7 +134,7 @@ async function postPrivateEndpoint(
   const nonce = (Date.now() * 1000).toString()
   const signaturePayload = `/api/${path}${nonce}${bodyJson}`
   const signature = crypto
-    .createHmac('sha384', apiSecret)
+    .createHmac('sha384', bitfinexApiSecret)
     .update(signaturePayload)
     .digest('hex')
 
@@ -145,13 +144,10 @@ async function postPrivateEndpoint(
     headers: {
       'Content-Type': 'application/json',
       'bfx-nonce': nonce,
-      'bfx-apikey': apiKey,
+      'bfx-apikey': bitfinexApiKey,
       'bfx-signature': signature,
     },
   })
 
   return await res.json()
 }
-
-const apiKey = z.string().parse(process.env.BITFINEX_API_KEY)
-const apiSecret = z.string().parse(process.env.BITFINEX_API_SECRET)

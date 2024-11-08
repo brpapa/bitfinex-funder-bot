@@ -20,7 +20,7 @@ const accPercentRate = (rate: number, period: number, repeat = 1) => {
   return toPercent(accRate)
 }
 
-console.log(`$ ${finalAmount(0.05, 30, 10000)}`)
+// console.log(`$ ${finalAmount(0.078, 120, 1000)}`)
 // console.log(accPercentRate(0.1182, 120, 1))
 
 const dailyRates = [
