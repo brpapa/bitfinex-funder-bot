@@ -1,5 +1,5 @@
 import { SNSClient, PublishCommand } from '@aws-sdk/client-sns'
-import { awsAccountId, region, topicName } from '../env'
+import { awsAccountId, region, alertsTopicName } from '../env'
 
 const snsClient = new SNSClient({ region: region })
 
@@ -7,7 +7,7 @@ export async function publishAlert(description: string) {
   const data = await snsClient.send(
     new PublishCommand({
       Message: `Bitfinex Bot Alert:\n\n${description}`,
-      TopicArn: `arn:aws:sns:${region}:${awsAccountId}:${topicName}`,
+      TopicArn: `arn:aws:sns:${region}:${awsAccountId}:${alertsTopicName}`,
     })
   )
 

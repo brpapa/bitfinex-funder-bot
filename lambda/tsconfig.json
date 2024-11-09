@@ -1,6 +1,6 @@
 {
   "include": [
-    "lambda/src"
+    "src"
   ],
   "exclude": [
     "node_modules",

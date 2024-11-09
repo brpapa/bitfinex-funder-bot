@@ -6,8 +6,7 @@ export const handler = async () => {
     await simple()
   } catch (e) {
     console.error('got unexpected exception:', e)
-    throw e
-    // await publishAlert(`${e}`)
+    await publishAlert(`${e}`)
   }
   return { ok: true }
 }

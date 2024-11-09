@@ -18,8 +18,10 @@ resource "aws_ecr_repository" "this" {
   image_tag_mutability = "MUTABLE"
 }
 
-# ecr lifecycle policy to expire/remove untagged images
+
 resource "aws_ecr_lifecycle_policy" "this" {
+  # ecr lifecycle policy to expire/remove untagged images
+
   depends_on = [aws_ecr_repository.this]
   repository = aws_ecr_repository.this.name
 
@@ -45,21 +47,20 @@ resource "aws_ecr_lifecycle_policy" "this" {
 # if any file within lambda/** changes, run docker build locally and push a new image with latest tag to ECR repository 
 
 locals {
-  lambda_path = "${path.module}/../lambda"
-  lambda_src_files                   = fileset("${local.lambda_path}", "**/*")
-  lambda_src_files_hashes = join("", [for file in local.lambda_src_files : md5(file("${local.lambda_path}/${file}"))])
-  lambda_src_hash                    = md5(local.lambda_src_files_hashes)
+  lambda_path         = "${path.module}/../lambda"
+  lambda_files_hashes = join("", [for file in fileset("${local.lambda_path}", "**/*") : md5(file("${local.lambda_path}/${file}"))])
+  lambda_hash         = md5(local.lambda_files_hashes)
 }
 
 resource "null_resource" "local_docker_build_tag_push" {
   depends_on = [aws_ecr_repository.this]
 
   triggers = {
-    lambda_src_hash = local.lambda_src_hash
+    lambda_hash = local.lambda_hash
   }
 
   provisioner "local-exec" {
-    working_dir = "${local.lambda_path}"
+    working_dir = local.lambda_path
     command     = <<EOT
       aws ecr get-login-password --profile ${var.profile} --region ${var.region} | docker login --username AWS --password-stdin ${aws_ecr_repository.this.repository_url}
 
@@ -70,8 +71,8 @@ resource "null_resource" "local_docker_build_tag_push" {
   }
 }
 
-# to get the current image digest of image with latest tag, whichi it will force lambda changes if a new image was pushed
 data "aws_ecr_image" "latest" {
+  # to get the current image digest of image with latest tag, whichi it will force lambda changes if a new image was pushed
   depends_on = [null_resource.local_docker_build_tag_push]
 
   repository_name = aws_ecr_repository.this.name
@@ -90,10 +91,10 @@ resource "aws_lambda_function" "this" {
   timeout       = 30
 }
 
-# eventbridge scheduled lambda invocation (every hour)
+# scheduled lambda invocation
 resource "aws_cloudwatch_event_rule" "this" {
   name                = var.event_rule_name
-  schedule_expression = "cron(0 * * * ? *)"
+  schedule_expression = "cron(0 * * * ? *)" # every hour
 }
 
 resource "aws_cloudwatch_event_target" "this" {
@@ -102,8 +103,8 @@ resource "aws_cloudwatch_event_target" "this" {
   arn       = aws_lambda_function.this.arn
 }
 
-# grant eventbridge permission to invoke lambda
 resource "aws_lambda_permission" "this" {
+  # grant eventbridge permission to invoke lambda
   statement_id  = "${var.event_rule_name}Permission"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.this.function_name
@@ -111,7 +112,7 @@ resource "aws_lambda_permission" "this" {
   source_arn    = aws_cloudwatch_event_rule.this.arn
 }
 
-# alert sns topic
+# alert topic
 
 resource "aws_sns_topic" "alerts" {
   name = var.alerts_topic_name
@@ -168,8 +169,8 @@ resource "aws_iam_policy" "lambda_policy" {
   })
 }
 
-# attach policy to the role
 resource "aws_iam_role_policy_attachment" "lambda_policy_attachment" {
+  # attach policy to the role
   role       = aws_iam_role.lambda_execution.name
   policy_arn = aws_iam_policy.lambda_policy.arn
 }
