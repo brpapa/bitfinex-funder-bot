@@ -1,5 +1,5 @@
-import { publishAlert } from './notification/sns'
-import { simple } from './strategies/simple'
+import { publishAlert } from './funder/alert'
+import { simple } from './funder/strategy'
 
 export const handler = async () => {
   try {

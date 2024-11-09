@@ -1,4 +1,11 @@
 import {
+  Duration,
+  formatDuration,
+  intervalToDuration,
+  sub,
+  subHours,
+} from 'date-fns'
+import {
   cancelFundingOffer,
   getActiveFundingOffers,
   getFundingBalanceAvailable,
@@ -6,7 +13,11 @@ import {
   submitFundingOffer as submitFundingOffer,
 } from '../bitfinex/private'
 import { getFundingStats } from '../bitfinex/public'
-import { publishAlert } from '../notification/sns'
+import { publishAlert } from './alert'
+import {
+  getIdleAmountsOrderedByMostOlder,
+  saveCurrentIdleAmount as addCurrentIdleAmount,
+} from './idle-amount'
 
 type Currency = 'USD' | 'EUR'
 const currencies: Currency[] = ['USD', 'EUR']
@@ -21,24 +32,62 @@ const frrOffset = (currency: Currency) =>
 export async function simple() {
   for (const currency of currencies) {
     console.group(`for ${currency}`)
-    await persistIdleAmount(currency)
-    await alertIfSomeAmountIsIdleForALongTime(currency)
+    const activeOffers = await getActiveFundingOffers(fSymbol(currency))
+    await persistIdleAmount(currency, activeOffers)
+    await alertIfThresholdAmountIsIdleInDuration(currency, 300, { days: 2 })
 
     const rate = await getDesiredRate(currency)
-    const offers = await getActiveFundingOffers(fSymbol(currency))
-    await cancelActiveOffersWithoutDesiredRate(rate, offers)
-    await offerAllAvailableBalance(currency, rate, offers)
+    await cancelActiveOffersWithoutDesiredRate(rate, activeOffers)
+    await offerAllAvailableBalance(currency, rate, activeOffers)
     console.groupEnd()
   }
 }
 
-async function persistIdleAmount(currency: Currency) {
-  // TODO: pegar saldo disponivel + soma de todas ofertas ativas, salvar esse valor + timestamp da execucao no s3 (manter só ultimos 180d)
+async function persistIdleAmount(currency: Currency, activeOffers: Offer[]) {
+  const offersAmount = activeOffers.reduce((acc, o) => acc + o.amount, 0)
+  const walletAmount = await getFundingBalanceAvailable(fSymbol(currency))
+
+  const idleAmount = offersAmount + walletAmount
+  console.log(`idle amount is ${idleAmount}`)
+
+  await addCurrentIdleAmount(currency, idleAmount)
 }
 
-async function alertIfSomeAmountIsIdleForALongTime(currency: Currency) {
-  // TODO: alertar se o minimo do money idle nos ultimas 24h é maior que 150
-  // await publishAlert(`150 ${currency} has been idle for 5 days`)
+async function alertIfThresholdAmountIsIdleInDuration(
+  currency: Currency,
+  thresholdAmount: number,
+  duration: Duration
+) {
+  const idleAmountsBetweenDuration = (
+    await getIdleAmountsOrderedByMostOlder(currency)
+  ).filter((a) => a.ts >= sub(new Date(), duration))
+
+  if (idleAmountsBetweenDuration.length === 0) return
+
+  const lowestAmount = idleAmountsBetweenDuration.reduce(
+    (acc, { value }) => (value < acc ? value : acc),
+    Infinity
+  )
+  const olderIdleAmount = idleAmountsBetweenDuration[0]
+
+  if (lowestAmount < thresholdAmount) return
+
+  const durationFormatted = formatDuration(
+    intervalToDuration({
+      start: olderIdleAmount.ts,
+      end: new Date(),
+    }),
+    {
+      delimiter: ', ',
+      zero: false,
+    }
+  )
+
+  await publishAlert(
+    `at least ${lowestAmount.toFixed(
+      2
+    )} ${currency} has been idle during the last ${durationFormatted}`
+  )
 }
 
 async function cancelActiveOffersWithoutDesiredRate(

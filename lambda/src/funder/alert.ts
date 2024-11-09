@@ -16,5 +16,5 @@ export async function publishAlert(description: string) {
       `fail publishing alert to sns topic, got http status code ${data.$metadata.httpStatusCode}`
     )
 
-  console.log('alert sent')
+  console.log(`alert sent: \"${description}\"`)
 }

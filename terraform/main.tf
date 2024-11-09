@@ -1,3 +1,13 @@
+terraform {
+  required_providers {
+    aws    = { source = "hashicorp/aws", version = ">= 5.0" }
+    random = { source = "hashicorp/random", version = ">= 3.0" }
+    null   = { source = "hashicorp/null", version = ">= 3.0" }
+  }
+
+  required_version = ">= 1.0.0"
+}
+
 provider "aws" {
   profile    = var.profile
   region     = var.region
@@ -48,7 +58,7 @@ resource "aws_ecr_lifecycle_policy" "this" {
 
 locals {
   lambda_path         = "${path.module}/../lambda"
-  lambda_files_hashes = join("", [for file in fileset("${local.lambda_path}", "**/*") : md5(file("${local.lambda_path}/${file}"))])
+  lambda_files_hashes = join("", [for file in fileset("${local.lambda_path}", "**/*") : filemd5("${local.lambda_path}/${file}")])
   lambda_hash         = md5(local.lambda_files_hashes)
 }
 
@@ -72,7 +82,6 @@ resource "null_resource" "local_docker_build_tag_push" {
 }
 
 data "aws_ecr_image" "latest" {
-  # to get the current image digest of image with latest tag, whichi it will force lambda changes if a new image was pushed
   depends_on = [null_resource.local_docker_build_tag_push]
 
   repository_name = aws_ecr_repository.this.name
@@ -82,11 +91,11 @@ data "aws_ecr_image" "latest" {
 # lambda
 
 resource "aws_lambda_function" "this" {
-  depends_on = [data.aws_ecr_image.latest]
+  depends_on = [data.aws_ecr_image.latest, aws_sns_topic.alerts, aws_s3_bucket.this, aws_iam_role.lambda_execution]
 
   function_name = var.function_name
   package_type  = "Image"
-  image_uri     = "${aws_ecr_repository.this.repository_url}@${data.aws_ecr_image.latest.image_digest}"
+  image_uri     = "${aws_ecr_repository.this.repository_url}@${data.aws_ecr_image.latest.image_digest}" # include the current image digest of latest tag to force lambda update if a new image was pushed
   role          = aws_iam_role.lambda_execution.arn
   timeout       = 30
 }
@@ -124,6 +133,17 @@ resource "aws_sns_topic_subscription" "this" {
   endpoint  = var.alerts_phone_number # this number must be verified in sandbox destination phone numbers
 }
 
+# s3 bucket
+
+resource "random_pet" "lambda_bucket_suffix" {
+  length    = 2
+  separator = "-"
+}
+
+resource "aws_s3_bucket" "this" {
+  bucket = "${var.bucket_name_prefix}-${random_pet.lambda_bucket_suffix.id}"
+}
+
 # iam role that the lambda will assume
 resource "aws_iam_role" "lambda_execution" {
   name = "lambda_execution_role"
@@ -144,7 +164,7 @@ resource "aws_iam_role" "lambda_execution" {
 
 resource "aws_iam_policy" "lambda_policy" {
   name        = "lambda_policy"
-  description = "Policy for Lambda to publish to SNS and write logs to CloudWatch"
+  description = "Policy for Lambda to publish to SNS, interact with S3 and write logs to CloudWatch"
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -155,6 +175,14 @@ resource "aws_iam_policy" "lambda_policy" {
           "sns:Publish"
         ]
         Resource = aws_sns_topic.alerts.arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject"
+        ]
+        Resource = "${aws_s3_bucket.this.arn}/*"
       },
       {
         Effect = "Allow"

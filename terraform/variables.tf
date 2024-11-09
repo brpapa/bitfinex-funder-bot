@@ -1,15 +1,14 @@
 variable "profile" {
-  description = "AWS CLI profile to use"
-  type        = string
+  type    = string
+  default = "default"
 }
 
 variable "region" {
-  type        = string
-  default     = "us-east-1"
+  type = string
 }
 
 variable "aws_account_id" {
-  type        = string
+  type = string
 }
 
 variable "aws_access_key" {
@@ -23,21 +22,25 @@ variable "aws_secret_key" {
 }
 
 variable "image_name" {
-  type        = string
+  type = string
 }
 
 variable "function_name" {
-  type        = string
+  type = string
+}
+
+variable "bucket_name_prefix" {
+  type = string
 }
 
 variable "event_rule_name" {
-  type        = string
+  type = string
 }
 
 variable "alerts_topic_name" {
-  type        = string
+  type = string
 }
 
 variable "alerts_phone_number" {
-  type        = string
+  type = string
 }
