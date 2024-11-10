@@ -1,4 +1,4 @@
-import { getTickers } from './bitfinex/public'
+import { getTradingTickers } from './bitfinex/public'
 import { inspect } from 'util'
 
 const log = (obj: any) => {
@@ -43,7 +43,7 @@ const symbolsWithBtcPair = [
 ]
 
 ;(async () => {
-  const tickers = await getTickers([
+  const tickers = await getTradingTickers([
     'tBTCUSD',
     ...symbolsWithBtcPair.map((s) => `t${s}BTC`),
     ...symbolsWithBtcPair.map((s) => `t${s}USD`),

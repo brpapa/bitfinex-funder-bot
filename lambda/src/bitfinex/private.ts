@@ -4,14 +4,13 @@ import { bitfinexApiKey, bitfinexApiSecret } from '../env'
 
 // returns for current user (me): https://docs.bitfinex.com/docs/rest-auth
 
-export const getFundingBalanceAvailable = (symbol: string) =>
-  postPrivateEndpoint('v2/auth/calc/order/avail', {
-    symbol,
-    type: 'FUNDING',
-  }).then((response) => {
-    const balance = z.array(z.any()).parse(response)[0]
-    return -z.number().parse(balance)
-  })
+export const getFundingAvailableBalance = async (currency: string) => {
+  const wallets = await getWallets()
+  return (
+    wallets.filter((w) => w.type === 'funding' && w.currency === currency).at(0)
+      ?.availableBalance ?? 0
+  )
+}
 
 export const getWallets = () =>
   postPrivateEndpoint('v2/auth/r/wallets').then((response) =>
@@ -102,15 +101,14 @@ const parseOffer = (offer: unknown[]) => ({
   period: z.number().parse(offer[15]),
 })
 
-export const getActiveFundingCredits = (symbol: string) =>
-  postPrivateEndpoint(`v2/auth/r/funding/credits/${symbol}`).then((response) =>
-    z.array(z.array(z.any())).parse(response).map(parseCredit)
-  )
-
-export const getPastInactiveFundingCredits = (symbol: string) =>
-  postPrivateEndpoint(`v2/auth/r/funding/credits/${symbol}/hist`).then(
-    (response) => z.array(z.array(z.any())).parse(response).map(parseCredit)
-  )
+export const getFundingInfo = (symbol: string) =>
+  postPrivateEndpoint(`v2/auth/r/info/funding/${symbol}`).then((response) => {
+    const fundingInfo = z.array(z.any()).parse(response)[2]
+    return {
+      yieldLend: z.number().parse(fundingInfo[1]),
+      durationLend: z.number().parse(fundingInfo[3]),
+    }
+  })
 
 const parseCredit = (credit: unknown[]) => ({
   id: z.number().parse(credit[0]),

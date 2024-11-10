@@ -14,7 +14,7 @@ export const getCandles = (candle: string) =>
       }))
   )
 
-export const getTickers = (symbols: string[]) =>
+export const getTradingTickers = (symbols: string[]) =>
   getPublicEndpoint('v2/tickers', { symbols }).then((response) =>
     z
       .array(z.array(z.any()))
@@ -28,6 +28,20 @@ export const getTickers = (symbols: string[]) =>
         lastPrice: z.number().parse(ticker[7]),
       }))
   )
+
+export const getFundingTicker = (symbol: string) =>
+  getPublicEndpoint(`v2/ticker/${symbol}`).then((response) => {
+    const ticker = z.array(z.any()).parse(response)
+
+    return {
+      frr: z.number().parse(ticker[0]),
+      bid: z.number().parse(ticker[1]),
+      bidPeriod: z.number().parse(ticker[2]),
+      ask: z.number().parse(ticker[4]),
+      askPeriod: z.number().parse(ticker[5]),
+      frrAmountAvaiable: z.number().parse(ticker[15]),
+    }
+  })
 
 export const getFundingStats = (
   symbol: string,
