@@ -15,197 +15,189 @@ import {
   getIdleAmountsOrderedByMostOlder,
 } from './idle-amount'
 
-type Currency = 'USD' | 'EUR' | 'GBP'
-const currencies: Currency[] = ['USD', 'EUR', 'GBP']
+export type Currency = 'USD' | 'EUR' | 'GBP'
 
-const frrOffset = (currency: Currency) =>
-  ({
-    USD: -0.000025,
-    EUR: -0.000015,
-    GBP: -0.000015,
-  }[currency])
+// alerta é disparado se pelo menos `thresholdIdleAmount` está parado por pelo menos `duration`
+type IdleAlert = {
+  thresholdIdleAmount: number
+  duration: Duration
+}
 
-const desiredPeriod = (currency: Currency, desiredRate: number) =>
-  ({
-    USD: () => {
-      if (desiredRate >= 0.0006) return 120
-      if (desiredRate >= 0.0005) return 30
-      if (desiredRate >= 0.0004) return 7
-      return 2
-    },
-    EUR: () => {
-      if (desiredRate >= 0.0008) return 120
-      if (desiredRate >= 0.0007) return 30
-      if (desiredRate >= 0.0006) return 7
-      return 2
-    },
-    GBP: () => {
-      if (desiredRate >= 0.00085) return 120
-      if (desiredRate >= 0.00075) return 30
-      if (desiredRate >= 0.00065) return 7
-      return 2
-    },
-  }[currency]())
+export type Params = {
+  currency: Currency
+  targetRate: (frr: number) => number
+  targetPeriod: (targetRate: number) => number
+  idleAlert: IdleAlert
+}
 
 // estratégia para sempre estar emprestado com uma taxa levemente abaixo da ultima taxa frr (com mais dias se ela for boa)
-export async function simple() {
-  for (const currency of currencies) {
-    console.group(`for ${currency}`)
+export class SimpleStrategy {
+  public static async run(params: Params) {
+    await new SimpleStrategy(params).run()
+  }
 
+  constructor(private params: Params) {}
+
+  private async run() {
+    console.group(`for ${this.params.currency}`)
+    const { balanceIdle } = await this.checkCurrentSituation()
+
+    await addCurrentIdleAmount(this.params.currency, balanceIdle)
+    await this.alertIfAtLeastThresholdIsIdleForAtLeastTheDuration(
+      this.params.idleAlert
+    )
+
+    await this.repositionActiveOffers()
+    console.groupEnd()
+  }
+
+  private async checkCurrentSituation() {
     console.group('checking current situation...')
     const wallet = (await getWallets())
-      .filter((w) => w.type === 'funding' && w.currency == currency)
+      .filter((w) => w.type === 'funding' && w.currency == this.params.currency)
       .at(0)
     const balanceTotal = wallet?.balance ?? 0
 
     const balanceOffered = (
-      await getActiveFundingOffers(fSymbol(currency))
+      await getActiveFundingOffers(fSymbol(this.params.currency))
     ).reduce((acc, o) => acc + o.amount, 0)
     const balanceAvailable = wallet?.availableBalance ?? 0
 
     const balanceLended = balanceTotal - balanceOffered - balanceAvailable
     const balanceIdle = balanceTotal - balanceLended
 
-    const fundingInfo = await getFundingInfo(fSymbol(currency))
-    const yieldLendedInPercentage = (fundingInfo.yieldLend * 100).toPrecision(5)
-    const yieldLendedAprInPercentage = (
-      fundingInfo.yieldLend *
-      100 *
-      365
-    ).toFixed(2)
+    const fundingInfo = await getFundingInfo(fSymbol(this.params.currency))
+    const yieldLend = fundingInfo.yieldLend
+    const yieldLendedAprInPercentage = (yieldLend * 100 * 365).toFixed(2)
 
     console.log(
       'balance lended:',
       balanceLended,
-      `at ${yieldLendedInPercentage}% (apr = ${yieldLendedAprInPercentage}%) by ${fundingInfo.durationLend} days`
+      `at ${yieldLend} by ${fundingInfo.durationLend} days (apr = ${yieldLendedAprInPercentage}%)`
     )
     console.log('balance idle:', balanceIdle)
-
     console.groupEnd()
-
-    await addCurrentIdleAmount(currency, balanceIdle)
-    await alertIfThresholdAmountIsIdleInDuration(currency, 300, { days: 4 })
-
-    console.group('re-positioning active offers...')
-    const rate = await getDesiredRate(currency)
-    const activeOffers = await getActiveFundingOffers(fSymbol(currency))
-    await cancelActiveOffersWithoutDesiredRate(currency, rate, activeOffers)
-    await offerAllAvailableBalance(currency, rate, activeOffers)
-    console.groupEnd()
-
-    console.groupEnd()
+    return { balanceIdle }
   }
-}
 
-// TODO: se o primeiro q esta salvo no banco nao for há tanto tempo atras nao alertar!!
-async function alertIfThresholdAmountIsIdleInDuration(
-  currency: Currency,
-  thresholdAmount: number,
-  duration: Duration
-) {
-  const idleAmountsBetweenDuration = (
-    await getIdleAmountsOrderedByMostOlder(currency)
-  ).filter((a) => a.ts >= sub(new Date(), duration))
+  private async alertIfAtLeastThresholdIsIdleForAtLeastTheDuration({
+    thresholdIdleAmount,
+    duration,
+  }: IdleAlert) {
+    const idleAmounts = await getIdleAmountsOrderedByMostOlder(
+      this.params.currency
+    )
+    const idleAmountsOrderedByMostRecent = idleAmounts.reverse()
 
-  if (idleAmountsBetweenDuration.length === 0) return
+    let lowestAmount = Infinity
+    for (const { ts, value } of idleAmountsOrderedByMostRecent) {
+      if (value < thresholdIdleAmount) break
 
-  const lowestAmount = idleAmountsBetweenDuration.reduce(
-    (acc, { value }) => (value < acc ? value : acc),
-    Infinity
-  )
-  const olderIdleAmount = idleAmountsBetweenDuration[0]
+      lowestAmount = value < lowestAmount ? value : lowestAmount
 
-  if (lowestAmount < thresholdAmount) return
+      if (ts <= sub(new Date(), duration)) {
+        const durationFormatted = formatDuration(
+          intervalToDuration({
+            start: ts,
+            end: new Date(),
+          }),
+          {
+            delimiter: ', ',
+            zero: false,
+          }
+        )
 
-  const durationFormatted = formatDuration(
-    intervalToDuration({
-      start: olderIdleAmount.ts,
-      end: new Date(),
-    }),
-    {
-      delimiter: ', ',
-      zero: false,
+        await publishAlert(
+          `${lowestAmount.toFixed(2)} ${
+            this.params.currency
+          } has been idle for at least the last ${durationFormatted}`
+        )
+      }
     }
-  )
-
-  await publishAlert(
-    `at least ${lowestAmount.toFixed(
-      2
-    )} ${currency} has been idle during the last ${durationFormatted}`
-  )
-}
-
-async function cancelActiveOffersWithoutDesiredRate(
-  currency: Currency,
-  desiredRate: number,
-  activeOffers: Offer[]
-) {
-  const offersToCancel = activeOffers.filter(
-    (offer) =>
-      offer.rate != desiredRate ||
-      offer.period != desiredPeriod(currency, desiredRate)
-  )
-
-  console.group(
-    `${offersToCancel.length} of ${activeOffers.length} offers to be cancelled`
-  )
-  for (const offer of offersToCancel) await cancelFundingOffer(offer.id)
-  console.groupEnd()
-}
-
-async function offerAllAvailableBalance(
-  currency: Currency,
-  desiredRate: number,
-  activeOffers: Offer[]
-) {
-  const availableBalance = await getFundingAvailableBalance(currency)
-  console.group(`balance available to offer: ${availableBalance}`)
-
-  for (const amount of splitInParts(availableBalance, 300)) {
-    await submitFundingOffer({
-      type: 'LIMIT',
-      symbol: fSymbol(currency),
-      amount: amount.toString(),
-      rate: desiredRate.toString(),
-      period: desiredPeriod(currency, desiredRate),
-    })
   }
 
-  const remainingBalance = await getFundingAvailableBalance(currency)
-
-  if (remainingBalance > 0 && activeOffers.length > 0) {
-    const fistOffer = activeOffers[0]
-    await cancelFundingOffer(fistOffer.id)
-
-    await submitFundingOffer({
-      type: 'LIMIT',
-      symbol: fSymbol(currency),
-      amount: (await getFundingAvailableBalance(currency)).toString(),
-      rate: desiredRate.toString(),
-      period: desiredPeriod(currency, desiredRate),
-    })
+  private async repositionActiveOffers() {
+    console.group(
+      're-positioning active offers aiming the target rate/period...'
+    )
+    const rate = await this.resolveTargetRate()
+    const activeOffers = await getActiveFundingOffers(
+      fSymbol(this.params.currency)
+    )
+    await this.cancelActiveOffersWithoutTargetRate(rate, activeOffers)
+    await this.offerAllAvailableBalance(rate, activeOffers)
+    console.groupEnd()
   }
 
-  console.groupEnd()
-}
+  private async resolveTargetRate() {
+    const ticker = await getFundingTicker(fSymbol(this.params.currency))
+    const mostRecentFrr = ticker.frr
 
-const getDesiredRate = async (currency: Currency) => {
-  const ticker = await getFundingTicker(fSymbol(currency))
-  const mostRecentFrr = ticker.frr
+    const targetRate = parseFloat(
+      this.params.targetRate(mostRecentFrr).toFixed(6)
+    )
+    const aprInPercentage = (targetRate * 100 * 365).toFixed(2)
 
-  const desiredRate = parseFloat(
-    (mostRecentFrr + frrOffset(currency)).toFixed(5)
-  )
-  const desiredRateInPercentage = (desiredRate * 100).toPrecision(5)
-  const aprInPercentage = (desiredRate * 100 * 365).toFixed(2)
+    console.log(
+      `most recent daily frr is ${mostRecentFrr}, so daily target rate is ${targetRate} by ${this.params.targetPeriod(
+        targetRate
+      )} days (apr = ${aprInPercentage}%)`
+    )
+    return targetRate
+  }
 
-  console.log(
-    `most recent daily frr is ${mostRecentFrr}, so daily desired rate is ${desiredRate} (${desiredRateInPercentage}%) by ${desiredPeriod(
-      currency,
-      desiredRate
-    )} days (apr = ${aprInPercentage}%)`
-  )
-  return desiredRate
+  private async cancelActiveOffersWithoutTargetRate(
+    targetRate: number,
+    activeOffers: Offer[]
+  ) {
+    const offersToCancel = activeOffers.filter(
+      (offer) =>
+        offer.rate != targetRate ||
+        offer.period != this.params.targetPeriod(targetRate)
+    )
+
+    for (const offer of offersToCancel) await cancelFundingOffer(offer.id)
+  }
+
+  private async offerAllAvailableBalance(
+    targetRate: number,
+    activeOffers: Offer[]
+  ) {
+    const availableBalance = await getFundingAvailableBalance(
+      this.params.currency
+    )
+
+    for (const amount of splitInParts(availableBalance, 300)) {
+      await submitFundingOffer({
+        type: 'LIMIT',
+        symbol: fSymbol(this.params.currency),
+        amount: amount.toString(),
+        rate: targetRate.toString(),
+        period: this.params.targetPeriod(targetRate),
+      })
+    }
+
+    const remainingBalance = await getFundingAvailableBalance(
+      this.params.currency
+    )
+
+    if (remainingBalance > 0 && activeOffers.length > 0) {
+      const fistOffer = activeOffers[0]
+      await cancelFundingOffer(fistOffer.id)
+
+      await submitFundingOffer({
+        type: 'LIMIT',
+        symbol: fSymbol(this.params.currency),
+        amount: (
+          await getFundingAvailableBalance(this.params.currency)
+        ).toString(),
+        rate: targetRate.toString(),
+        period: this.params.targetPeriod(targetRate),
+      })
+    }
+
+    console.groupEnd()
+  }
 }
 
 const fSymbol = (currency: String) => `f${currency}`
@@ -217,7 +209,10 @@ const splitInParts = (total: number, part: number) => {
   for (let i = 0; i < x; i++) ret.push(part)
 
   const rest = total % part
-  if (rest > 0) ret.push(rest)
+  if (rest > 0) {
+    if (ret.length > 0) ret[ret.length - 1] += rest
+    else ret.push(rest)
+  }
 
   return ret
 }

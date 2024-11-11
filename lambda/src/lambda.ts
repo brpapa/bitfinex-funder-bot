@@ -1,9 +1,9 @@
 import { publishAlert } from './funder/alert'
-import { simple } from './funder/strategy'
+import { run } from './funder'
 
 export const handler = async () => {
   try {
-    await simple()
+    await run()
   } catch (e) {
     console.error('got unexpected exception:', e)
     await publishAlert(`${e}`)
