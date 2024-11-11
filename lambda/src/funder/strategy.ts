@@ -17,9 +17,9 @@ import {
 
 export type Currency = 'USD' | 'EUR' | 'GBP'
 
-// alerta é disparado se pelo menos `thresholdIdleAmount` está parado por pelo menos `duration`
-type IdleAlert = {
-  thresholdIdleAmount: number
+// alerta é disparado se pelo menos `thresholdAmount` está parado por pelo menos `duration`
+type IdleAmountAlert = {
+  thresholdAmount: number
   duration: Duration
 }
 
@@ -27,7 +27,7 @@ export type Params = {
   currency: Currency
   targetRate: (frr: number) => number
   targetPeriod: (targetRate: number) => number
-  idleAlert: IdleAlert
+  idleAmountAlert: IdleAmountAlert
 }
 
 // estratégia para sempre estar emprestado com uma taxa levemente abaixo da ultima taxa frr (com mais dias se ela for boa)
@@ -44,7 +44,7 @@ export class SimpleStrategy {
 
     await addCurrentIdleAmount(this.params.currency, balanceIdle)
     await this.alertIfAtLeastThresholdIsIdleForAtLeastTheDuration(
-      this.params.idleAlert
+      this.params.idleAmountAlert
     )
 
     await this.repositionActiveOffers()
@@ -52,7 +52,6 @@ export class SimpleStrategy {
   }
 
   private async checkCurrentSituation() {
-    console.group('checking current situation...')
     const wallet = (await getWallets())
       .filter((w) => w.type === 'funding' && w.currency == this.params.currency)
       .at(0)
@@ -70,20 +69,19 @@ export class SimpleStrategy {
     const yieldLend = fundingInfo.yieldLend
     const yieldLendedAprInPercentage = (yieldLend * 100 * 365).toFixed(2)
 
+    console.log('balance idle:', balanceIdle)
     console.log(
       'balance lended:',
       balanceLended,
-      `at ${yieldLend} by ${fundingInfo.durationLend} days (apr = ${yieldLendedAprInPercentage}%)`
+      `at ${yieldLend} rate by ${fundingInfo.durationLend} days (apr = ${yieldLendedAprInPercentage}%)`
     )
-    console.log('balance idle:', balanceIdle)
-    console.groupEnd()
     return { balanceIdle }
   }
 
   private async alertIfAtLeastThresholdIsIdleForAtLeastTheDuration({
-    thresholdIdleAmount,
+    thresholdAmount: thresholdIdleAmount,
     duration,
-  }: IdleAlert) {
+  }: IdleAmountAlert) {
     const idleAmounts = await getIdleAmountsOrderedByMostOlder(
       this.params.currency
     )
@@ -93,7 +91,7 @@ export class SimpleStrategy {
     for (const { ts, value } of idleAmountsOrderedByMostRecent) {
       if (value < thresholdIdleAmount) break
 
-      lowestAmount = value < lowestAmount ? value : lowestAmount
+      lowestAmount = Math.min(lowestAmount, value)
 
       if (ts <= sub(new Date(), duration)) {
         const durationFormatted = formatDuration(
@@ -117,33 +115,23 @@ export class SimpleStrategy {
   }
 
   private async repositionActiveOffers() {
-    console.group(
-      're-positioning active offers aiming the target rate/period...'
-    )
-    const rate = await this.resolveTargetRate()
-    const activeOffers = await getActiveFundingOffers(
-      fSymbol(this.params.currency)
-    )
-    await this.cancelActiveOffersWithoutTargetRate(rate, activeOffers)
-    await this.offerAllAvailableBalance(rate, activeOffers)
-    console.groupEnd()
-  }
-
-  private async resolveTargetRate() {
     const ticker = await getFundingTicker(fSymbol(this.params.currency))
-    const mostRecentFrr = ticker.frr
+    const frr = parseFloat(ticker.frr.toFixed(8))
 
-    const targetRate = parseFloat(
-      this.params.targetRate(mostRecentFrr).toFixed(6)
-    )
+    const targetRate = parseFloat(this.params.targetRate(frr).toFixed(6))
     const aprInPercentage = (targetRate * 100 * 365).toFixed(2)
 
-    console.log(
-      `most recent daily frr is ${mostRecentFrr}, so daily target rate is ${targetRate} by ${this.params.targetPeriod(
+    console.group(
+      `frr is ${frr}, then re-positioning active offers aiming the target: ${targetRate} rate by ${this.params.targetPeriod(
         targetRate
       )} days (apr = ${aprInPercentage}%)`
     )
-    return targetRate
+    const activeOffers = await getActiveFundingOffers(
+      fSymbol(this.params.currency)
+    )
+    await this.cancelActiveOffersWithoutTargetRate(targetRate, activeOffers)
+    await this.offerAllAvailableBalance(targetRate, activeOffers)
+    console.groupEnd()
   }
 
   private async cancelActiveOffersWithoutTargetRate(

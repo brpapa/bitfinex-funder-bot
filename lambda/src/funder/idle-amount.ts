@@ -3,9 +3,9 @@ import {
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3'
-import { bucketName, env, region } from '../env'
-import { z } from 'zod'
 import { Duration, sub } from 'date-fns'
+import { z } from 'zod'
+import { bucketName, region } from '../env'
 
 const s3Client = new S3Client({ region: region })
 const s3ObjKey = (currency: string) => `idle-amounts-${currency}.json`

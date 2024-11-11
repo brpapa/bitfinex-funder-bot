@@ -3,9 +3,9 @@
   "scripts": {
     "docker:run": "docker build --platform linux/arm64 --tag bot . && docker run --rm -p 8080:8080 bot",
     "docker:invoke": "curl --request POST --url http://localhost:8080/2015-03-31/functions/function/invocations --data '{}'",
-    "local:invoke": "ENV=local ts-node src/invoke.ts",
-    "local:simulator": "ENV=local ts-node src/simulator.ts",
-    "local:arbitrage": "ENV=local ts-node src/arbitrage.ts",
+    "invoke": "ENABLE_ALERTS=false ts-node src/invoke.ts",
+    "simulator": "ENABLE_ALERTS=false ts-node src/simulator.ts",
+    "arbitrage": "ENABLE_ALERTS=false ts-node src/arbitrage.ts",
     "build": "npx tsc"
   },
   "devDependencies": {

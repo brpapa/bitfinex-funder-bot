@@ -1,11 +1,11 @@
 import { SNSClient, PublishCommand } from '@aws-sdk/client-sns'
-import { awsAccountId, region, alertsTopicName, env } from '../env'
+import { awsAccountId, region, alertsTopicName, enableAlerts } from '../env'
 
 const snsClient = new SNSClient({ region: region })
 
 export async function publishAlert(description: string) {
-  if (env === 'local') {
-    console.log(`(local only) ${publishAlert.name}(\"${description}\") bypassed`)
+  if (!enableAlerts) {
+    console.log(`disabled ${publishAlert.name}(\"${description}\")`)
     return
   }
 
