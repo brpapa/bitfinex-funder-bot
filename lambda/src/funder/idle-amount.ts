@@ -9,7 +9,7 @@ import { bucketName, region } from '../env'
 
 const s3Client = new S3Client({ region: region })
 const s3ObjKey = (currency: string) => `idle-amounts-${currency}.json`
-const ttlDuration: Duration = { years: 1 }
+const idleAmountTTL: Duration = { months: 3 }
 
 type IdleAmount = z.infer<typeof IdleAmountsType>[0]
 const IdleAmountsType = z.array(
@@ -22,7 +22,7 @@ const IdleAmountsType = z.array(
 export async function saveCurrentIdleAmount(currency: string, amount: number) {
   const prev = await getIdleAmountsOrderedByMostOlder(currency)
   const newest = [...prev, { ts: new Date(), value: amount }].filter(
-    ({ ts }) => ts > sub(new Date(), ttlDuration)
+    ({ ts }) => ts > sub(new Date(), idleAmountTTL)
   )
 
   await s3Client.send(

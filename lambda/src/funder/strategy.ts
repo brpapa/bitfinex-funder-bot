@@ -8,7 +8,7 @@ import {
   Offer,
   submitFundingOffer,
 } from '../bitfinex/private'
-import { getFundingTicker } from '../bitfinex/public'
+import { getAksOfFundingBook, getFundingTicker } from '../bitfinex/public'
 import { publishAlert } from './alert'
 import {
   saveCurrentIdleAmount as addCurrentIdleAmount,
@@ -25,7 +25,7 @@ type IdleAmountAlert = {
 
 export type Params = {
   currency: Currency
-  targetRate: (frr: number) => number
+  targetRate: (rate: number) => number
   targetPeriod: (targetRate: number) => number
   idleAmountAlert: IdleAmountAlert
 }
@@ -69,12 +69,13 @@ export class SimpleStrategy {
     const yieldLend = fundingInfo.yieldLend
     const yieldLendedAprInPercentage = (yieldLend * 100 * 365).toFixed(2)
 
-    console.log('balance idle:', balanceIdle)
     console.log(
       'balance lended:',
       balanceLended,
       `at ${yieldLend} rate by ${fundingInfo.durationLend} days (apr = ${yieldLendedAprInPercentage}%)`
     )
+    console.log('balance idle:', balanceIdle)
+
     return { balanceIdle }
   }
 
@@ -88,15 +89,15 @@ export class SimpleStrategy {
     const idleAmountsOrderedByMostRecent = idleAmounts.reverse()
 
     let lowestAmount = Infinity
-    for (const { ts, value } of idleAmountsOrderedByMostRecent) {
-      if (value < thresholdIdleAmount) break
+    for (const idleAmount of idleAmountsOrderedByMostRecent) {
+      if (idleAmount.value < thresholdIdleAmount) break
 
-      lowestAmount = Math.min(lowestAmount, value)
+      lowestAmount = Math.min(lowestAmount, idleAmount.value)
 
-      if (ts <= sub(new Date(), duration)) {
+      if (idleAmount.ts <= sub(new Date(), duration)) {
         const durationFormatted = formatDuration(
           intervalToDuration({
-            start: ts,
+            start: idleAmount.ts,
             end: new Date(),
           }),
           {
@@ -115,17 +116,25 @@ export class SimpleStrategy {
   }
 
   private async repositionActiveOffers() {
+    console.group('re-positioning active offers to match target...')
+
     const ticker = await getFundingTicker(fSymbol(this.params.currency))
     const frr = parseFloat(ticker.frr.toFixed(8))
+    const asks = await getAksOfFundingBook(fSymbol(this.params.currency), 'P2')
+    const lowerAskRate = asks.find((a) => a.amount > 1e5)?.rate ?? -Infinity
 
-    const targetRate = parseFloat(this.params.targetRate(frr).toFixed(6))
+    console.log(`flash return rate: ${frr}, lower ask rate: ${lowerAskRate}`)
+
+    const bestRate = Math.max(frr, lowerAskRate)
+
+    const targetRate = parseFloat(this.params.targetRate(bestRate).toFixed(6))
+    const targetPeriod = this.params.targetPeriod(targetRate)
     const aprInPercentage = (targetRate * 100 * 365).toFixed(2)
 
-    console.group(
-      `frr is ${frr}, then re-positioning active offers aiming the target: ${targetRate} rate by ${this.params.targetPeriod(
-        targetRate
-      )} days (apr = ${aprInPercentage}%)`
+    console.log(
+      `target: ${targetRate} rate by ${targetPeriod} days (apr = ${aprInPercentage}%)`
     )
+
     const activeOffers = await getActiveFundingOffers(
       fSymbol(this.params.currency)
     )

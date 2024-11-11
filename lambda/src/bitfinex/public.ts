@@ -2,6 +2,22 @@
 
 import { z } from 'zod'
 
+// ordered by the lowest rate
+export const getAksOfFundingBook = (symbol: string, precision: string) =>
+  getPublicEndpoint(`v2/book/${symbol}/${precision}`, { len: 100 }).then(
+    (response) =>
+      z
+        .array(z.array(z.any()))
+        .parse(response)
+        .map((b) => ({
+          rate: z.number().parse(b[0]),
+          period: z.number().parse(b[1]),
+          count: z.number().parse(b[2]),
+          amount: z.number().parse(b[3]),
+        }))
+        .filter((b) => b.amount > 0)
+  )
+
 export const getCandles = (candle: string) =>
   getPublicEndpoint(`v2/candles/${candle}/hist`).then((response) =>
     z
