@@ -39,7 +39,8 @@ export class SimpleStrategy {
   constructor(private params: Params) {}
 
   private async run() {
-    console.group(`for ${this.params.currency}`)
+    console.group(`${this.params.currency}:`)
+
     const { balanceIdle } = await this.checkCurrentSituation()
 
     await addCurrentIdleAmount(this.params.currency, balanceIdle)
@@ -48,6 +49,8 @@ export class SimpleStrategy {
     )
 
     await this.repositionActiveOffers()
+
+    console.log()
     console.groupEnd()
   }
 
@@ -69,12 +72,12 @@ export class SimpleStrategy {
     const yieldLend = fundingInfo.yieldLend
     const yieldLendedAprInPercentage = (yieldLend * 100 * 365).toFixed(2)
 
+    console.log('idle:', balanceIdle)
     console.log(
-      'balance lended:',
+      'lended:',
       balanceLended,
       `at ${yieldLend} rate by ${fundingInfo.durationLend} days (apr = ${yieldLendedAprInPercentage}%)`
     )
-    console.log('balance idle:', balanceIdle)
 
     return { balanceIdle }
   }
@@ -90,9 +93,9 @@ export class SimpleStrategy {
 
     let lowestAmount = Infinity
     for (const idleAmount of idleAmountsOrderedByMostRecent) {
-      if (idleAmount.value < thresholdIdleAmount) break
-
       lowestAmount = Math.min(lowestAmount, idleAmount.value)
+
+      if (idleAmount.value < thresholdIdleAmount) break
 
       if (idleAmount.ts <= sub(new Date(), duration)) {
         const durationFormatted = formatDuration(
@@ -111,19 +114,20 @@ export class SimpleStrategy {
             this.params.currency
           } has been idle for at least the last ${durationFormatted}`
         )
+        break
       }
     }
   }
 
   private async repositionActiveOffers() {
-    console.group('re-positioning active offers to match target...')
+    const activeOffers = await getActiveFundingOffers(
+      fSymbol(this.params.currency)
+    )
 
     const ticker = await getFundingTicker(fSymbol(this.params.currency))
     const frr = parseFloat(ticker.frr.toFixed(8))
     const asks = await getAksOfFundingBook(fSymbol(this.params.currency), 'P2')
     const lowerAskRate = asks.find((a) => a.amount > 1e5)?.rate ?? -Infinity
-
-    console.log(`flash return rate: ${frr}, lower ask rate: ${lowerAskRate}`)
 
     const bestRate = Math.max(frr, lowerAskRate)
 
@@ -131,13 +135,10 @@ export class SimpleStrategy {
     const targetPeriod = this.params.targetPeriod(targetRate)
     const aprInPercentage = (targetRate * 100 * 365).toFixed(2)
 
-    console.log(
-      `target: ${targetRate} rate by ${targetPeriod} days (apr = ${aprInPercentage}%)`
+    console.group(
+      `${activeOffers.length} offers actives, (re)positioning to match the target: ${targetRate} rate by ${targetPeriod} days (apr = ${aprInPercentage}%)`
     )
 
-    const activeOffers = await getActiveFundingOffers(
-      fSymbol(this.params.currency)
-    )
     await this.cancelActiveOffersWithoutTargetRate(targetRate, activeOffers)
     await this.offerAllAvailableBalance(targetRate, activeOffers)
     console.groupEnd()
