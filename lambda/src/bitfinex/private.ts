@@ -69,7 +69,7 @@ export const submitFundingOffer = async (req: {
           throw new Error(`got error submitting funding offer: ${error}`)
 
         console.log(
-          `not submitted funding offer of ${req.amount} ${req.symbol} at ${req.rate} for ${req.period} days because of \"${error}\"`
+          `fail submitting funding offer of ${req.amount} ${req.symbol} at ${req.rate} for ${req.period} days because of \"${error}\"`
         )
         return
       }

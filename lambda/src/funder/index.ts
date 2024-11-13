@@ -16,7 +16,7 @@ export async function run() {
     },
     idleAmountAlert: {
       thresholdAmount: 200,
-      duration: { days: 5 },
+      duration: { days: 20 },
     },
   })
 
@@ -31,7 +31,7 @@ export async function run() {
     },
     idleAmountAlert: {
       thresholdAmount: 200,
-      duration: { hours: 18 },
+      duration: { days: 3 },
     },
   })
 
@@ -46,7 +46,7 @@ export async function run() {
     },
     idleAmountAlert: {
       thresholdAmount: 200,
-      duration: { hours: 12 },
+      duration: { days: 3 },
     },
   })
 }

@@ -76,7 +76,7 @@ export class SimpleStrategy {
     console.log(
       'lended:',
       balanceLended,
-      `at ${yieldLend} rate by ${fundingInfo.durationLend} days (apr = ${yieldLendedAprInPercentage}%)`
+      `at ${yieldLend} rate for ${fundingInfo.durationLend} days (apr = ${yieldLendedAprInPercentage}%)`
     )
 
     return { balanceIdle }
@@ -136,22 +136,25 @@ export class SimpleStrategy {
     const aprInPercentage = (targetRate * 100 * 365).toFixed(2)
 
     console.group(
-      `${activeOffers.length} offers actives, (re)positioning to match the target: ${targetRate} rate by ${targetPeriod} days (apr = ${aprInPercentage}%)`
+      `${activeOffers.length} offers actives, (re)positioning to match the target: ${targetRate} rate for ${targetPeriod} days (apr = ${aprInPercentage}%)`
     )
 
-    await this.cancelActiveOffersWithoutTargetRate(targetRate, activeOffers)
+    await this.cancelActiveOffersWithoutTargetRatePeriod(
+      targetRate,
+      targetPeriod,
+      activeOffers
+    )
     await this.offerAllAvailableBalance(targetRate, activeOffers)
     console.groupEnd()
   }
 
-  private async cancelActiveOffersWithoutTargetRate(
+  private async cancelActiveOffersWithoutTargetRatePeriod(
     targetRate: number,
+    targetPeriod: number,
     activeOffers: Offer[]
   ) {
     const offersToCancel = activeOffers.filter(
-      (offer) =>
-        offer.rate != targetRate ||
-        offer.period != this.params.targetPeriod(targetRate)
+      (offer) => offer.rate != targetRate || offer.period != targetPeriod
     )
 
     for (const offer of offersToCancel) await cancelFundingOffer(offer.id)

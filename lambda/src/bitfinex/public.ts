@@ -18,13 +18,15 @@ export const getAksOfFundingBook = (symbol: string, precision: string) =>
         .filter((b) => b.amount > 0)
   )
 
-export const getCandles = (candle: string) =>
-  getPublicEndpoint(`v2/candles/${candle}/hist`).then((response) =>
+export const getCandles = (candle: string, limit?: number) =>
+  getPublicEndpoint(`v2/candles/${candle}/hist`, { limit }).then((response) =>
     z
       .array(z.array(z.any()))
       .parse(response)
       .map((candle) => ({
         ts: new Date(z.number().parse(candle[0])),
+        open: z.number().parse(candle[1]),
+        close: z.number().parse(candle[2]),
         high: z.number().parse(candle[3]),
         low: z.number().parse(candle[4]),
       }))
