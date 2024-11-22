@@ -20,13 +20,14 @@ export type Currency = 'USD' | 'EUR' | 'GBP'
 // alerta é disparado se pelo menos `thresholdAmount` está parado por pelo menos `duration`
 type IdleAmountAlert = {
   thresholdAmount: number
+  // max = ttl of idle amount s3
   duration: Duration
 }
 
 export type Params = {
   currency: Currency
-  minAccAskAmount: number
-  targetRate: (rate: number) => number
+  bbrMinAccAskAmount: number
+  targetRate: (ffr: number, bbr: number) => number
   targetPeriod: (targetRate: number) => number
   idleAmountAlert: IdleAmountAlert
 }
@@ -77,7 +78,11 @@ export class Strategy {
       await getIdleAmountsOrderedByMostRecent(this.params.currency)
     ).find((v) => v.value < balanceIdle)?.ts
 
-    console.log('idle:', balanceIdle, idleSinceAt ? `since ${idleSinceAt}` : '')
+    console.log(
+      'idle:',
+      balanceIdle,
+      idleSinceAt ? `for ${durationTextUntilNow(idleSinceAt)}` : ''
+    )
     console.log(
       'lended:',
       balanceLended,
@@ -102,21 +107,12 @@ export class Strategy {
       if (idleAmount.value < thresholdIdleAmount) break
 
       if (idleAmount.ts <= sub(new Date(), duration)) {
-        const durationFormatted = formatDuration(
-          intervalToDuration({
-            start: idleAmount.ts,
-            end: new Date(),
-          }),
-          {
-            delimiter: ', ',
-            zero: false,
-          }
-        )
-
         await publishAlert(
           `${lowestAmount.toFixed(2)} ${
             this.params.currency
-          } has been idle for at least the last ${durationFormatted}`
+          } has been idle for at least the last ${durationTextUntilNow(
+            idleAmount.ts
+          )}`
         )
         break
       }
@@ -130,29 +126,30 @@ export class Strategy {
 
     const ticker = await getFundingTicker(fSymbol(this.params.currency))
     const frr = parseFloat(ticker.frr.toFixed(8))
-    const asks = await getAksOfFundingBook(fSymbol(this.params.currency), 'P1')
 
-    const asksAccAmount = asks.reduce<{ rate: number; amount: number }[]>(
-      (acc, ask) => {
-        if (acc.length === 0) return [{ rate: ask.rate, amount: ask.amount }]
-        return [
-          ...acc,
-          {
-            rate: ask.rate,
-            amount: ask.count * ask.amount + acc[acc.length - 1].amount,
-          },
-        ]
-      },
-      []
+    const bookAsks = await getAksOfFundingBook(
+      fSymbol(this.params.currency),
+      'P3'
     )
 
-    const lowerAskRate =
-      asksAccAmount.find((a) => a.amount >= this.params.minAccAskAmount)
-        ?.rate ?? -Infinity
+    const bookAsksAccAmount = bookAsks.reduce<
+      { rate: number; amount: number }[]
+    >((acc, ask) => {
+      if (acc.length === 0) return [{ rate: ask.rate, amount: ask.amount }]
+      return [
+        ...acc,
+        {
+          rate: ask.rate,
+          amount: ask.amount + acc[acc.length - 1].amount,
+        },
+      ]
+    }, [])
 
-    const bestRate = Math.max(frr, lowerAskRate)
+    const bbr =
+      bookAsksAccAmount.find((a) => a.amount >= this.params.bbrMinAccAskAmount)
+        ?.rate ?? bookAsksAccAmount[bookAsksAccAmount.length - 1].rate
 
-    const targetRate = parseFloat(this.params.targetRate(bestRate).toFixed(6))
+    const targetRate = parseFloat(this.params.targetRate(frr, bbr).toFixed(6))
     const targetPeriod = this.params.targetPeriod(targetRate)
     const aprInPercentage = (targetRate * 100 * 365).toFixed(2)
 
@@ -161,8 +158,8 @@ export class Strategy {
       'offers actives',
       '| frr',
       frr,
-      '| br',
-      bestRate,
+      '| bbr',
+      bbr,
       `-> positioning to match the target: ${targetRate} rate for ${targetPeriod} days (apr = ${aprInPercentage}%)`
     )
 
@@ -243,4 +240,17 @@ const splitInParts = (total: number, part: number) => {
   }
 
   return ret
+}
+
+const durationTextUntilNow = (fromTs: Date) => {
+  return formatDuration(
+    intervalToDuration({
+      start: fromTs,
+      end: new Date(),
+    }),
+    {
+      delimiter: ', ',
+      zero: false,
+    }
+  )
 }

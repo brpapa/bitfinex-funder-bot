@@ -3,6 +3,7 @@
   "scripts": {
     "docker:run": "docker build --platform linux/arm64 --tag bot . && docker run --rm -p 8080:8080 bot",
     "docker:invoke": "curl --request POST --url http://localhost:8080/2015-03-31/functions/function/invocations --data '{}'",
+    "deploy": "(cd ../terraform && terraform apply -auto-approve)",
     "invoke": "ENABLE_ALERTS=false ts-node src/invoke-lambda.ts",
     "funder-simulator": "ENABLE_ALERTS=false ts-node src/funder/simulator.ts",
     "arbitrage": "ENABLE_ALERTS=false ts-node src/arbitrage.ts",

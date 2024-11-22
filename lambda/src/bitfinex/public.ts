@@ -3,7 +3,10 @@
 import { z } from 'zod'
 
 // ordered by the lowest rate
-export const getAksOfFundingBook = (symbol: string, precision: string) =>
+export const getAksOfFundingBook = (
+  symbol: string,
+  precision: 'P0' | 'P1' | 'P2' | 'P3'
+) =>
   getPublicEndpoint(`v2/book/${symbol}/${precision}`, { len: 100 }).then(
     (response) => {
       return z

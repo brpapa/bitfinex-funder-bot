@@ -103,7 +103,7 @@ resource "aws_lambda_function" "this" {
 # scheduled lambda invocation
 resource "aws_cloudwatch_event_rule" "this" {
   name                = var.event_rule_name
-  schedule_expression = "cron(0 * * * ? *)" # every hour
+  schedule_expression = "cron(*/30 * * * ? *)" # every 30m
 }
 
 resource "aws_cloudwatch_event_target" "this" {
@@ -129,8 +129,8 @@ resource "aws_sns_topic" "alerts" {
 
 resource "aws_sns_topic_subscription" "this" {
   topic_arn = aws_sns_topic.alerts.arn
-  protocol  = "sms"
-  endpoint  = var.alerts_phone_number # this number must be verified in sandbox destination phone numbers
+  protocol  = "email"
+  endpoint  = var.alerts_email
 }
 
 # s3 bucket

@@ -9,7 +9,7 @@ import { bucketName, region } from '../env'
 
 const s3Client = new S3Client({ region: region })
 const s3ObjKey = (currency: string) => `idle-amounts-${currency}.json`
-const idleAmountTTL: Duration = { months: 3 }
+const idleAmountTTL: Duration = { months: 1 }
 
 type IdleAmount = z.infer<typeof IdleAmountsType>[0]
 const IdleAmountsType = z.array(

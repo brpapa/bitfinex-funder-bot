@@ -41,6 +41,6 @@ variable "alerts_topic_name" {
   type = string
 }
 
-variable "alerts_phone_number" {
+variable "alerts_email" {
   type = string
 }
