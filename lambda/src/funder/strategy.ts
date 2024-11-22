@@ -11,8 +11,8 @@ import {
 import { getAksOfFundingBook, getFundingTicker } from '../bitfinex/public'
 import { publishAlert } from './alert'
 import {
-  saveCurrentIdleAmount as addCurrentIdleAmount,
-  getIdleAmountsOrderedByMostOlder,
+  registerIdleAmount,
+  getIdleAmountsOrderedByMostRecent,
 } from './idle-amount'
 
 export type Currency = 'USD' | 'EUR' | 'GBP'
@@ -25,15 +25,16 @@ type IdleAmountAlert = {
 
 export type Params = {
   currency: Currency
+  minAccAskAmount: number
   targetRate: (rate: number) => number
   targetPeriod: (targetRate: number) => number
   idleAmountAlert: IdleAmountAlert
 }
 
 // estratégia para sempre estar emprestado com uma taxa levemente abaixo da ultima taxa frr (com mais dias se ela for boa)
-export class SimpleStrategy {
+export class Strategy {
   public static async run(params: Params) {
-    await new SimpleStrategy(params).run()
+    await new Strategy(params).run()
   }
 
   constructor(private params: Params) {}
@@ -43,7 +44,7 @@ export class SimpleStrategy {
 
     const { balanceIdle } = await this.checkCurrentSituation()
 
-    await addCurrentIdleAmount(this.params.currency, balanceIdle)
+    await registerIdleAmount(this.params.currency, balanceIdle)
     await this.alertIfAtLeastThresholdIsIdleForAtLeastTheDuration(
       this.params.idleAmountAlert
     )
@@ -72,7 +73,11 @@ export class SimpleStrategy {
     const yieldLend = fundingInfo.yieldLend
     const yieldLendedAprInPercentage = (yieldLend * 100 * 365).toFixed(2)
 
-    console.log('idle:', balanceIdle)
+    const idleSinceAt = (
+      await getIdleAmountsOrderedByMostRecent(this.params.currency)
+    ).find((v) => v.value < balanceIdle)?.ts
+
+    console.log('idle:', balanceIdle, idleSinceAt ? `since ${idleSinceAt}` : '')
     console.log(
       'lended:',
       balanceLended,
@@ -86,13 +91,12 @@ export class SimpleStrategy {
     thresholdAmount: thresholdIdleAmount,
     duration,
   }: IdleAmountAlert) {
-    const idleAmounts = await getIdleAmountsOrderedByMostOlder(
+    const idleAmounts = await getIdleAmountsOrderedByMostRecent(
       this.params.currency
     )
-    const idleAmountsOrderedByMostRecent = idleAmounts.reverse()
 
     let lowestAmount = Infinity
-    for (const idleAmount of idleAmountsOrderedByMostRecent) {
+    for (const idleAmount of idleAmounts) {
       lowestAmount = Math.min(lowestAmount, idleAmount.value)
 
       if (idleAmount.value < thresholdIdleAmount) break
@@ -126,8 +130,25 @@ export class SimpleStrategy {
 
     const ticker = await getFundingTicker(fSymbol(this.params.currency))
     const frr = parseFloat(ticker.frr.toFixed(8))
-    const asks = await getAksOfFundingBook(fSymbol(this.params.currency), 'P2')
-    const lowerAskRate = asks.find((a) => a.amount > 1e5)?.rate ?? -Infinity
+    const asks = await getAksOfFundingBook(fSymbol(this.params.currency), 'P1')
+
+    const asksAccAmount = asks.reduce<{ rate: number; amount: number }[]>(
+      (acc, ask) => {
+        if (acc.length === 0) return [{ rate: ask.rate, amount: ask.amount }]
+        return [
+          ...acc,
+          {
+            rate: ask.rate,
+            amount: ask.count * ask.amount + acc[acc.length - 1].amount,
+          },
+        ]
+      },
+      []
+    )
+
+    const lowerAskRate =
+      asksAccAmount.find((a) => a.amount >= this.params.minAccAskAmount)
+        ?.rate ?? -Infinity
 
     const bestRate = Math.max(frr, lowerAskRate)
 
@@ -136,7 +157,13 @@ export class SimpleStrategy {
     const aprInPercentage = (targetRate * 100 * 365).toFixed(2)
 
     console.group(
-      `${activeOffers.length} offers actives, (re)positioning to match the target: ${targetRate} rate for ${targetPeriod} days (apr = ${aprInPercentage}%)`
+      activeOffers.length,
+      'offers actives',
+      '| frr',
+      frr,
+      '| br',
+      bestRate,
+      `-> positioning to match the target: ${targetRate} rate for ${targetPeriod} days (apr = ${aprInPercentage}%)`
     )
 
     await this.cancelActiveOffersWithoutTargetRatePeriod(

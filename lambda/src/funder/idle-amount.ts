@@ -19,7 +19,7 @@ const IdleAmountsType = z.array(
   })
 )
 
-export async function saveCurrentIdleAmount(currency: string, amount: number) {
+export async function registerIdleAmount(currency: string, amount: number) {
   const prev = await getIdleAmountsOrderedByMostOlder(currency)
   const newest = [...prev, { ts: new Date(), value: amount }].filter(
     ({ ts }) => ts > sub(new Date(), idleAmountTTL)
@@ -52,4 +52,10 @@ export async function getIdleAmountsOrderedByMostOlder(
     if (e?.name == 'NoSuchKey') return []
     throw e
   }
+}
+
+export async function getIdleAmountsOrderedByMostRecent(
+  currency: string
+): Promise<IdleAmount[]> {
+  return (await getIdleAmountsOrderedByMostOlder(currency)).reverse()
 }
