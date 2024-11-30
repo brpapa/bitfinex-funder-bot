@@ -13,12 +13,12 @@ export async function run() {
     targetPeriod: (targetRate: number) => {
       if (targetRate >= 0.0008) return 120
       if (targetRate >= 0.0007) return 30
-      if (targetRate >= 0.0005) return 7
-      return 2
+      if (targetRate >= 0.0005) return 10
+      return 5
     },
     idleAmountAlert: {
       thresholdAmount: 200,
-      duration: { days: 5 },
+      duration: { days: 20 },
     },
   })
 
@@ -31,7 +31,7 @@ export async function run() {
       if (targetRate >= 0.0007) return 120
       if (targetRate >= 0.0006) return 90
       if (targetRate >= 0.0005) return 30
-      return 2
+      return 5
     },
     idleAmountAlert: {
       thresholdAmount: 200,
