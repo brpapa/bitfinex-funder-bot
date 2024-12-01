@@ -1,6 +1,6 @@
 import crypto from 'crypto'
 import { z } from 'zod'
-import { bitfinexApiKey, bitfinexApiSecret } from '../env'
+import { env } from '../env'
 
 // returns for current user (me): https://docs.bitfinex.com/docs/rest-auth
 
@@ -132,7 +132,7 @@ async function postPrivateEndpoint(
   const nonce = (Date.now() * 1000).toString()
   const signaturePayload = `/api/${path}${nonce}${bodyJson}`
   const signature = crypto
-    .createHmac('sha384', bitfinexApiSecret)
+    .createHmac('sha384', env.BITFINEX_API_SECRET)
     .update(signaturePayload)
     .digest('hex')
 
@@ -142,7 +142,7 @@ async function postPrivateEndpoint(
     headers: {
       'Content-Type': 'application/json',
       'bfx-nonce': nonce,
-      'bfx-apikey': bitfinexApiKey,
+      'bfx-apikey': env.BITFINEX_API_KEY,
       'bfx-signature': signature,
     },
   })

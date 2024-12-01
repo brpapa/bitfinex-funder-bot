@@ -5,9 +5,16 @@ import {
 } from '@aws-sdk/client-s3'
 import { Duration, sub } from 'date-fns'
 import { z } from 'zod'
-import { bucketName, region } from '../env'
+import { env } from '../env'
 
-const s3Client = new S3Client({ region: region })
+const s3Client = new S3Client({
+  region: env.REGION,
+  credentials: {
+    accessKeyId: env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: env.AWS_SECRET_ACCESS_KEY_ID,
+  },
+})
+
 const s3ObjKey = (currency: string) => `idle-amounts-${currency}.json`
 const idleAmountTTL: Duration = { months: 6 }
 
@@ -27,7 +34,7 @@ export async function registerIdleAmount(currency: string, amount: number) {
 
   await s3Client.send(
     new PutObjectCommand({
-      Bucket: bucketName,
+      Bucket: env.BUCKET_NAME,
       Key: s3ObjKey(currency),
       Body: JSON.stringify(newest),
     })
@@ -40,7 +47,7 @@ export async function getIdleAmountsOrderedByMostOlder(
   try {
     const output = await s3Client.send(
       new GetObjectCommand({
-        Bucket: bucketName,
+        Bucket: env.BUCKET_NAME,
         Key: s3ObjKey(currency),
       })
     )

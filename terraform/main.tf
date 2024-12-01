@@ -72,11 +72,13 @@ resource "null_resource" "local_docker_build_tag_push" {
   provisioner "local-exec" {
     working_dir = local.lambda_path
     command     = <<EOT
+      orb
       aws ecr get-login-password --profile ${var.profile} --region ${var.region} | docker login --username AWS --password-stdin ${aws_ecr_repository.this.repository_url}
 
       docker build --platform linux/arm64 -t ${var.image_name} .
       docker tag ${var.image_name}:latest ${aws_ecr_repository.this.repository_url}:latest
       docker push ${aws_ecr_repository.this.repository_url}:latest
+      orb stop
     EOT
   }
 }
