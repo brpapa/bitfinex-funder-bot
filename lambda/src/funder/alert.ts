@@ -1,12 +1,9 @@
-import { SNSClient, PublishCommand } from '@aws-sdk/client-sns'
-import { env } from '../env'
+import { PublishCommand, SNSClient } from '@aws-sdk/client-sns'
+import { awsCredentials, env } from '../env'
 
 const snsClient = new SNSClient({
   region: env.REGION,
-  credentials: {
-    accessKeyId: env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: env.AWS_SECRET_ACCESS_KEY_ID,
-  },
+  credentials: awsCredentials,
 })
 
 export async function publishAlert(description: string) {

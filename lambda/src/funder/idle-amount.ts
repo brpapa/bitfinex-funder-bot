@@ -5,14 +5,11 @@ import {
 } from '@aws-sdk/client-s3'
 import { Duration, sub } from 'date-fns'
 import { z } from 'zod'
-import { env } from '../env'
+import { awsCredentials, env } from '../env'
 
 const s3Client = new S3Client({
   region: env.REGION,
-  credentials: {
-    accessKeyId: env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: env.AWS_SECRET_ACCESS_KEY_ID,
-  },
+  credentials: awsCredentials,
 })
 
 const s3ObjKey = (currency: string) => `idle-amounts-${currency}.json`

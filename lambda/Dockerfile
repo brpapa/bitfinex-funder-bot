@@ -9,4 +9,6 @@ RUN npm install
 COPY . ${LAMBDA_TASK_ROOT}
 RUN npm run build
 
+ENV NODE_ENV=prod
+
 CMD ["dist/lambda.handler"]
