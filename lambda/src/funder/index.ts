@@ -10,7 +10,7 @@ export async function run() {
     currency: 'USD',
     bbrMinAccAskAmount: 5e6,
     targetRate: (frr: number, bbr: number) =>
-      Math.max(Math.max(frr, bbr) - 0.00002, 0.00025),
+      Math.max(Math.max(frr, bbr) - 0.000025, 0.00025),
     targetPeriod: (targetRate: number) => {
       if (targetRate >= 0.0008) return 120
       if (targetRate >= 0.0007) return 60
@@ -19,7 +19,7 @@ export async function run() {
     },
     idleAmountAlert: {
       thresholdAmount: 200,
-      duration: { days: 20 },
+      duration: { days: 30 },
     },
   })
 
@@ -27,7 +27,7 @@ export async function run() {
     currency: 'EUR',
     bbrMinAccAskAmount: 2e5,
     targetRate: (frr: number, bbr: number) =>
-      Math.max(Math.max(frr, bbr) - 0.000015, 0.0004),
+      Math.max(Math.max(frr, bbr) - 0.00003, 0.0004),
     targetPeriod: (targetRate: number) => {
       if (targetRate >= 0.0007) return 120
       if (targetRate >= 0.0006) return 90
@@ -36,7 +36,7 @@ export async function run() {
     },
     idleAmountAlert: {
       thresholdAmount: 200,
-      duration: { days: 3 },
+      duration: { days: 14 },
     },
   })
 
@@ -53,7 +53,7 @@ export async function run() {
     },
     idleAmountAlert: {
       thresholdAmount: 200,
-      duration: { days: 3 },
+      duration: { days: 30 },
     },
   })
 }

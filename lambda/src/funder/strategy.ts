@@ -1,4 +1,13 @@
-import { Duration, formatDuration, intervalToDuration, sub } from 'date-fns'
+import {
+  add,
+  differenceInMilliseconds,
+  Duration,
+  format,
+  formatDuration,
+  intervalToDuration,
+  isAfter,
+  sub,
+} from 'date-fns'
 import {
   cancelFundingOffer,
   getActiveFundingOffers,
@@ -13,6 +22,7 @@ import { publishAlert } from './alert'
 import {
   registerIdleAmount,
   getIdleAmountsOrderedByMostRecent,
+  idleAmountTTL,
 } from './idle-amount'
 
 export type Currency = 'USD' | 'EUR' | 'GBP'
@@ -20,7 +30,6 @@ export type Currency = 'USD' | 'EUR' | 'GBP'
 // alerta é disparado se pelo menos `thresholdAmount` está parado por pelo menos `duration`
 type IdleAmountAlert = {
   thresholdAmount: number
-  // max = ttl of idle amount s3
   duration: Duration
 }
 
@@ -35,6 +44,15 @@ export type Params = {
 // estratégia para sempre estar emprestado com uma taxa levemente abaixo da ultima taxa frr (com mais dias se ela for boa)
 export class Strategy {
   public static async run(params: Params) {
+    if (isLongerThan(params.idleAmountAlert.duration, idleAmountTTL))
+      throw new Error(
+        `duration of "${formatDuration(
+          params.idleAmountAlert.duration
+        )}" is longer than the maximum supported of "${formatDuration(
+          idleAmountTTL
+        )}"`
+      )
+
     await new Strategy(params).run()
   }
 
@@ -253,4 +271,10 @@ const durationTextUntilNow = (fromTs: Date) => {
       zero: false,
     }
   )
+}
+
+// returns true if duration a is longer than b
+const isLongerThan = (a: Duration, b: Duration) => {
+  const start = new Date(0)
+  return isAfter(add(start, a), add(start, b))
 }

@@ -16,7 +16,7 @@ const s3Client = new S3Client({
 })
 
 const s3ObjKey = (currency: string) => `idle-amounts-${currency}.json`
-const idleAmountTTL: Duration = { months: 6 }
+export const idleAmountTTL: Duration = { months: 6 }
 
 type IdleAmount = z.infer<typeof IdleAmountsType>[0]
 const IdleAmountsType = z.array(
