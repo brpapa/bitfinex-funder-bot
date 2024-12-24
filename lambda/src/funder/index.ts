@@ -10,7 +10,7 @@ export async function run() {
     currency: 'USD',
     bbrMinAccAskAmount: 5e6,
     targetRate: (frr: number, bbr: number) =>
-      Math.max(Math.max(frr, bbr) - 0.000025, 0.00025),
+      Math.max(Math.max(frr, bbr) - 0.000025, 0.0002),
     targetPeriod: (targetRate: number) => {
       if (targetRate >= 0.0008) return 120
       if (targetRate >= 0.0007) return 60
