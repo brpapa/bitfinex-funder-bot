@@ -1,5 +1,6 @@
 import { Strategy } from './strategy'
 
+// 0.0002 = 0.6%/mês = 7.30%/ano
 // 0.0003 = 0.9%/mês = 10.95%/ano
 // 0.0004 = 1.2%/mes = 14.60%/ano
 // 0.0005 = 1.5%/mes = 18.25%/ano
@@ -15,7 +16,8 @@ export async function run() {
       if (targetRate >= 0.0008) return 120
       if (targetRate >= 0.0007) return 60
       if (targetRate >= 0.0005) return 15
-      return 7
+      if (targetRate >= 0.0004) return 7
+      return 2
     },
     idleAmountAlert: {
       thresholdAmount: 200,
@@ -27,12 +29,12 @@ export async function run() {
     currency: 'EUR',
     bbrMinAccAskAmount: 2e5,
     targetRate: (frr: number, bbr: number) =>
-      Math.max(Math.max(frr, bbr) - 0.00003, 0.0004),
+      Math.max(Math.max(frr, bbr) - 0.00003, 0.00035),
     targetPeriod: (targetRate: number) => {
       if (targetRate >= 0.0007) return 120
       if (targetRate >= 0.0006) return 90
       if (targetRate >= 0.0005) return 30
-      return 5
+      return 14
     },
     idleAmountAlert: {
       thresholdAmount: 200,
