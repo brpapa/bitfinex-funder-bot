@@ -10,8 +10,8 @@
     "deploy": "(cd ../terraform && terraform apply -auto-approve)",
     "invoke": "NODE_ENV=local ts-node src/invoke-lambda.ts",
     "funder-simulator": "NODE_ENV=local ts-node src/funder/simulator.ts",
-    "arbitrage": "NODE_ENV=local ts-node src/arbitrage.ts",
-    "trader": "NODE_ENV=local ts-node src/trader.ts",
+    "arbitrage": "NODE_ENV=local ts-node src/_arbitrage.ts",
+    "trader": "NODE_ENV=local ts-node src/_trader.ts",
     "build": "npx tsc"
   },
   "devDependencies": {

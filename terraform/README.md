@@ -1,5 +1,0 @@
-- create terraform.tfvars file
-- `terraform init`
-- `terraform validate`
-- `terraform plan`
-- `terraform apply`
