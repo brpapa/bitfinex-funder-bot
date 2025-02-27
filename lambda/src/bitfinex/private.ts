@@ -66,7 +66,11 @@ export const submitFundingOffer = async (req: {
       if (notification[0] === 'error') {
         const error = z.string().parse(notification[2])
         if (!error.startsWith('Invalid offer: incorrect amount, minimum is'))
-          throw new Error(`got error submitting funding offer: ${error}`)
+          throw new Error(
+            `got error submitting funding offer: ${error}, got response: ${JSON.stringify(
+              response
+            )}`
+          )
 
         console.log(
           `fail submitting funding offer of ${req.amount} ${req.symbol} at ${req.rate} for ${req.period} days because of \"${error}\"`
